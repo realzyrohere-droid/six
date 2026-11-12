@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="uz" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shaxmat — Zamonaviy Onlayn O'yin</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chess.js kutubxonasi (barcha rasmiy shaxmat qoidalari uchun) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0b0f19;
+            --bg-panel: #111827;
+            --board-light: #cbd5e1;
+            --board-dark: #475569;
+            --accent-emerald: #10b981;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-main);
+            background-image: 
+                radial-gradient(circle at 15% 20%, rgba(16, 185, 129, 0.08), transparent 35%),
+                radial-gradient(circle at 85% 80%, rgba(59, 130, 246, 0.08), transparent 35%);
+            color: #f8fafc;
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Shaxmat taxtasi va kataklari */
+        .chess-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            aspect-ratio: 1 / 1;
+            width: 100%;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1);
+        }
+
+        .square {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+
+        .square.light {
+            background-color: #cbd5e1; /* Slate 300 */
+        }
+
+        .square.dark {
+            background-color: #475569; /* Slate 600 */
+        }
+
+        /* Tanlangan katak */
+        .square.selected {
+            background-color: rgba(16, 185, 129, 0.65) !important;
+        }
+
+        /* Oxirgi yurish yoritilishi */
+        .square.last-move-light {
+            background-color: #fde68a !important; /* Amber 200 */
+        }
+        .square.last-move-dark {
+            background-color: #d97706 !important; /* Amber 600 */
+        }
+
+        /* Shoh (Check) holati */
+        .square.in-check {
+            background: radial-gradient(circle, rgba(239, 68, 68, 0.95) 20%, rgba(185, 28, 28, 0.85) 85%) !important;
+            animation: pulseCheck 1.2s infinite alternate;
+        }
+
+        @keyframes pulseCheck {
+            from { box-shadow: inset 0 0 8px rgba(239, 68, 68, 0.8); }
+            to { box-shadow: inset 0 0 20px rgba(254, 202, 202, 0.95); }
+        }
+
+        /* Yurish nuqtalari va urish halqalari */
+        .hint-dot {
+            width: 28%;
+            height: 28%;
+            border-radius: 50%;
+            background-color: rgba(16, 185, 129, 0.65);
+            pointer-events: none;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+            transition: transform 0.15s ease;
+        }
+
+        .square:hover .hint-dot {
+            transform: scale(1.2);
+            background-color: rgba(16, 185, 129, 0.85);
+        }
+
+        .hint-capture {
+            position: absolute;
+            inset: 6%;
+            border-radius: 50%;
+            border: 4px solid rgba(239, 68, 68, 0.75);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+        }
+
+        /* Shaxmat donalari SVG */
+        .piece-svg {
+            width: 82%;
+            height: 82%;
+            z-index: 10;
+            pointer-events: none;
+            filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45));
+            transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .square:hover .piece-svg {
+            transform: translateY(-2px) scale(1.04);
+        }
+
+        /* Koordinatalar (a-h, 1-8) */
+        .coord-rank {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            line-height: 1;
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        .coord-file {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            line-height: 1;
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        .square.light .coord-rank,
+        .square.light .coord-file {
+            color: #334155;
+        }
+
+        .square.dark .coord-rank,
+        .square.dark .coord-file {
+            color: #e2e8f0;
+        }
+
+        /* Custom Scrollbar for Move History */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Mode & Difficulty Active Buttons */
+        .pill-btn.active {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #022c22;
+            font-weight: 700;
+            border-color: #34d399;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+        }
+    </style>
+</head>
+<body class="p-3 sm:p-6 flex flex-col items-center justify-center">
+
+    <!-- Asosiy Konteyner -->
+    <div class="w-full max-w-6xl mx-auto flex flex-col gap-4">
+        
+        <!-- Yuqori Sarlavha Paneli -->
+        <header class="bg-slate-900/90 backdrop-blur-md border border-slate-800 px-5 py-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-inner">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 22H5v-2h14v2M17.16 8.26A4.96 4.96 0 0 0 18 5.5C18 3.57 16.43 2 14.5 2c-1.3 0-2.42.72-3 1.79A3.48 3.48 0 0 0 8.5 2C6.57 2 5 3.57 5 5.5c0 1.03.32 1.98.84 2.76A4.99 4.99 0 0 0 4 12c0 2.05 1.23 3.81 3 4.58V19h10v-2.42c1.77-.77 3-2.53 3-4.58 0-1.48-.65-2.81-1.84-3.74Z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                        SHAXMAT <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">PRO</span>
+                    </h1>
+                    <p class="text-xs text-slate-400 hidden sm:block">Klassik strategiya o'yini</p>
+                </div>
+            </div>
+
+            <!-- Rejim va Daraja Tanlash -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div class="bg-slate-950/80 p-1 rounded-xl border border-slate-800 flex gap-1">
+                    <button id="btn-mode-ai" class="pill-btn active px-3 py-1.5 rounded-lg text-xs sm:text-sm text-slate-300 transition-all flex items-center gap-1.5">
+                        <span>🤖</span> Botga qarshi
+                    </button>
+                    <button id="btn-mode-pvp" class="pill-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm text-slate-300 transition-all flex items-center gap-1.5">
+                        <span>👥</span> Do'st bilan
+                    </button>
+                </div>
+
+                <!-- Bot darajasi -->
+                <div id="ai-diff-container" class="bg-slate-950/80 p-1 rounded-xl border border-slate-800 flex gap-1">
+                    <button id="btn-diff-easy" class="pill-btn px-2.5 py-1.5 rounded-lg text-xs text-slate-300 transition-all">
+                        Oson
+                    </button>
+                    <button id="btn-diff-medium" class="pill-btn active px-2.5 py-1.5 rounded-lg text-xs text-slate-300 transition-all">
+                        O'rtacha
+                    </button>
+                </div>
+
+                <!-- Ovoz Tugmasi -->
+                <button id="btn-sound" title="Ovozni yoqish/o'chirish" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 transition-all active:scale-95">
+                    <svg id="icon-sound-on" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+                    </svg>
+                    <svg id="icon-sound-off" class="w-5 h-5 hidden text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Asosiy O'yin Maydoni (Chapda Taxta, O'ngda Ma'lumotlar) -->
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            
+            <!-- Chap Ustun: Yuqori o'yinchi + Taxta + Pastki o'yinchi -->
+            <div class="lg:col-span-7 xl:col-span-7 flex flex-col gap-2.5 max-w-[600px] w-full mx-auto">
+                
+                <!-- Yuqori O'yinchi Paneli (Default: Qoralar / Bot) -->
+                <div id="top-player-card" class="bg-slate-900/90 border border-slate-800 px-4 py-2.5 rounded-xl flex items-center justify-between shadow-md">
+                    <div class="flex items-center gap-3">
+                        <div id="top-player-avatar" class="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-lg">
+                            🤖
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span id="top-player-name" class="font-bold text-sm text-slate-200">Qoralar (Bot)</span>
+                                <span id="top-player-badge" class="hidden text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Navbat</span>
+                            </div>
+                            <!-- Yutilgan donalar -->
+                            <div id="top-captured" class="flex items-center flex-wrap gap-0.5 min-h-[20px] mt-0.5"></div>
+                        </div>
+                    </div>
+                    <div id="top-advantage" class="text-xs font-mono-code font-bold text-emerald-400"></div>
+                </div>
+
+                <!-- Shaxmat Taxtasi -->
+                <div class="relative bg-slate-900 p-2 sm:p-3 rounded-2xl border border-slate-800 shadow-2xl">
+                    <div id="chess-board" class="chess-board"></div>
+
+                    <!-- Piyoda Almashtirish (Promotion) Modali -->
+                    <div id="promotion-modal" class="hidden absolute inset-0 bg-slate-950/80 backdrop-blur-sm rounded-2xl z-30 flex items-center justify-center p-4">
+                        <div class="bg-slate-900 border border-emerald-500/40 p-5 rounded-2xl shadow-2xl text-center max-w-xs w-full">
+                            <h3 class="text-base font-bold text-white mb-1">Piyodani almashtirish</h3>
+                            <p class="text-xs text-slate-400 mb-4">Qaysi donani tanlaysiz?</p>
+                            <div id="promotion-choices" class="grid grid-cols-4 gap-2.5"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pastki O'yinchi Paneli (Default: Oqlar / Siz) -->
+                <div id="bottom-player-card" class="bg-slate-900/90 border border-slate-800 px-4 py-2.5 rounded-xl flex items-center justify-between shadow-md">
+                    <div class="flex items-center gap-3">
+                        <div id="bottom-player-avatar" class="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-lg">
+                            👤
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span id="bottom-player-name" class="font-bold text-sm text-white">Oqlar (Siz)</span>
+                                <span id="bottom-player-badge" class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Navbat</span>
+                            </div>
+                            <!-- Yutilgan donalar -->
+                            <div id="bottom-captured" class="flex items-center flex-wrap gap-0.5 min-h-[20px] mt-0.5"></div>
+                        </div>
+                    </div>
+                    <div id="bottom-advantage" class="text-xs font-mono-code font-bold text-emerald-400"></div>
+                </div>
+            </div>
+
+            <!-- O'ng Ustun: Holat, Boshqaruv Tugmalari va Yurishlar Tarixi -->
+            <div class="lg:col-span-5 xl:col-span-5 flex flex-col gap-4 w-full max-w-[600px] lg:max-w-none mx-auto">
+                
+                <!-- O'yin Holati (Status Banner) -->
+                <div id="status-card" class="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl shadow-lg transition-all">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-slate-400 uppercase tracking-wider mb-0.5">O'yin holati</p>
+                            <h2 id="status-text" class="text-base sm:text-lg font-bold text-emerald-400">
+                                Oqlarning yurishi
+                            </h2>
+                        </div>
+                        <div id="thinking-indicator" class="hidden flex items-center gap-2 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-full">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                            Bot o'ylamoqda...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Boshqaruv Tugmalari -->
+                <div class="grid grid-cols-3 gap-2.5">
+                    <button id="btn-new-game" class="py-3 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Yangi o'yin
+                    </button>
+
+                    <button id="btn-undo" class="py-3 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs sm:text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none">
+                        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                        </svg>
+                        Orqaga
+                    </button>
+
+                    <button id="btn-flip" class="py-3 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs sm:text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5">
+                        <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                        </svg>
+                        Aylantirish
+                    </button>
+                </div>
+
+                <!-- Yurishlar Tarixi (Algebraic Notation) -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-lg flex flex-col overflow-hidden h-[290px] sm:h-[340px]">
+                    <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            Yurishlar tarixi
+                        </span>
+                        <span id="move-count" class="text-xs font-mono-code text-slate-500">0 yurish</span>
+                    </div>
+
+                    <div id="move-history-list" class="p-3 overflow-y-auto custom-scroll flex-1 space-y-1 text-sm font-mono-code">
+                        <div class="text-center text-slate-500 text-xs py-10 font-sans">
+                            O'yinni boshlash uchun oq donalardan birini tanlang.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        /**
+         * 1. WEB AUDIO API OVOZ EFFEKTLARI
+         * Tashqi fayllarsiz toza shaxmat tovushlarini sintez qiladi
+         */
+        class ChessSound {
+            constructor() {
+                this.enabled = true;
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playMove() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(190, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(95, this.ctx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.22, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.09);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.09);
+                } catch (e) {}
+            }
+
+            playCapture() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(110, this.ctx.currentTime + 0.14);
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.15);
+                } catch (e) {}
+            }
+
+            playCastle() {
+                if (!this.enabled) return;
+                this.playMove();
+                setTimeout(() => this.playMove(), 95);
+            }
+
+            playCheck() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(660, this.ctx.currentTime);
+                    osc.frequency.setValueAtTime(880, this.ctx.currentTime + 0.09);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.22);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.23);
+                } catch (e) {}
+            }
+
+            playGameOver() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const notes = [523.25, 659.25, 783.99, 1046.5];
+                    notes.forEach((freq, idx) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'sine';
+                        const t = this.ctx.currentTime + idx * 0.11;
+                        osc.frequency.setValueAtTime(freq, t);
+                        gain.gain.setValueAtTime(0.18, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(t);
+                        osc.stop(t + 0.36);
+                    });
+                } catch (e) {}
+            }
+        }
+
+        /**
+         * 2. YUQORI SIFATLI STAUNTON SVG SHAXMAT DONALARI
+         */
+        const PIECE_SVGS = {
+            wP: `<svg class="piece-svg" viewBox="0 0 45 45"><path d="M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z" fill="#ffffff" stroke="#1e293b" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+            wR: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="#ffffff" stroke="#1e293b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5"/><path d="M34 14l-3 3H14l-3-3"/><path d="M31 17v12.5H14V17"/><path d="M31 29.5l1.5 2.5h-20l1.5-2.5"/><path d="M11 14h23" fill="none" stroke-linejoin="miter"/></g></svg>`,
+            wN: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="none" fill-rule="evenodd" stroke="#1e293b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18" fill="#ffffff"/><path d="M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,9.506 13.5,8.5 13.5,7.5 C 14.5,6.5 16.5,10 16.5,10 L 18.5,10 C 18.5,10 19.28,8.008 21,7 C 22,7 22,10 22,10" fill="#ffffff"/><path d="M 9.5 25.5 A 0.5 0.5 0 1 1 8.5,25.5 A 0.5 0.5 0 1 1 9.5 25.5 z" fill="#1e293b"/><path d="M 15 15.5 A 0.5 1.5 0 1 1 14,15.5 A 0.5 1.5 0 1 1 15 15.5 z" transform="matrix(0.866,0.5,-0.5,0.866,9.693,-5.173)" fill="#1e293b"/></g></svg>`,
+            wB: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="none" fill-rule="evenodd" stroke="#1e293b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><g fill="#ffffff" stroke-linecap="butt"><path d="M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z"/><path d="M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z"/><path d="M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z"/></g><path d="M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5" stroke-linejoin="miter"/></g></svg>`,
+            wQ: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="#ffffff" stroke="#1e293b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM24.5 7.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM41 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM16 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM33 9a2 2 0 1 1-4 0 2 2 0 1 1 4 0z"/><path d="M9 26c8.5-1.5 21-1.5 27 0l2-12-7 11V11l-5.5 13.5-3-15-3 15-5.5-14V25L7 14l2 12z" stroke-linecap="butt"/><path d="M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z" stroke-linecap="butt"/><path d="M11.5 30c3.5-1 18.5-1 22 0M12 33.5c6-1 15-1 21 0" fill="none"/></g></svg>`,
+            wK: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="none" fill-rule="evenodd" stroke="#1e293b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22.5 11.63V6M20 8h5" stroke-linejoin="miter"/><path d="M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5" fill="#ffffff" stroke-linecap="butt" stroke-linejoin="miter"/><path d="M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z" fill="#ffffff"/><path d="M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0"/></g></svg>`,
+
+            bP: `<svg class="piece-svg" viewBox="0 0 45 45"><path d="M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z" fill="#1e293b" stroke="#0f172a" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+            bR: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="#1e293b" stroke="#0f172a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 39h27v-3H9v3zM12.5 32l1.5-2.5h17l1.5 2.5h-20zM12 36v-4h21v4H12z" stroke-linecap="butt"/><path d="M14 29.5v-13h17v13H14z" stroke-linecap="butt" stroke-linejoin="miter"/><path d="M14 16.5L11 14h23l-3 2.5H14zM11 14V9h4v2h5V9h5v2h5V9h4v5H11z" stroke-linecap="butt"/><path d="M12 35.5h21M13 31.5h19M14 29.5h17M14 16.5h17M11 14h23" fill="none" stroke="#94a3b8" stroke-width="1.2" stroke-linejoin="miter"/></g></svg>`,
+            bN: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="none" fill-rule="evenodd" stroke="#0f172a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18" fill="#1e293b"/><path d="M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,9.506 13.5,8.5 13.5,7.5 C 14.5,6.5 16.5,10 16.5,10 L 18.5,10 C 18.5,10 19.28,8.008 21,7 C 22,7 22,10 22,10" fill="#1e293b"/><path d="M 9.5 25.5 A 0.5 0.5 0 1 1 8.5,25.5 A 0.5 0.5 0 1 1 9.5 25.5 z" fill="#cbd5e1" stroke="#cbd5e1"/><path d="M 15 15.5 A 0.5 1.5 0 1 1 14,15.5 A 0.5 1.5 0 1 1 15 15.5 z" transform="matrix(0.866,0.5,-0.5,0.866,9.693,-5.173)" fill="#cbd5e1" stroke="#cbd5e1"/><path d="M 24.55,10.4 L 24.1,11.85 L 24.6,12 C 27.75,13 30.25,14.49 32.5,18.75 C 34.75,23.01 35.75,29.06 35.25,39 L 35.2,39.5 L 37.45,39.5 L 37.5,39 C 38,28.94 36.62,22.15 34.25,17.66 C 31.88,13.17 28.46,11.02 25.06,10.5 L 24.55,10.4 z" fill="#94a3b8" stroke="none"/></g></svg>`,
+            bB: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="none" fill-rule="evenodd" stroke="#0f172a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><g fill="#1e293b" stroke-linecap="butt"><path d="M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z"/><path d="M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z"/><path d="M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z"/></g><path d="M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5" stroke="#94a3b8" stroke-width="1.4" stroke-linejoin="miter"/></g></svg>`,
+            bQ: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="#1e293b" stroke="#0f172a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><g stroke="none"><circle cx="6" cy="12" r="2.75"/><circle cx="14" cy="9" r="2.75"/><circle cx="22.5" cy="8" r="2.75"/><circle cx="31" cy="9" r="2.75"/><circle cx="39" cy="12" r="2.75"/></g><path d="M9 26c8.5-1.5 21-1.5 27 0l2.5-12.5L31 25l-.3-14.1-5.2 13.6-3-14.5-3 14.5-5.2-13.6L14 25 6.5 13.5 9 26z" stroke-linecap="butt"/><path d="M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z" stroke-linecap="butt"/><path d="M11 38.5a35 35 1 0 0 23 0" fill="none" stroke-linecap="butt"/><path d="M11 29a35 35 1 0 1 23 0M12.5 31.5h20M11.5 34.5a35 35 1 0 0 22 0M10.5 37.5a35 35 1 0 0 24 0" fill="none" stroke="#94a3b8" stroke-width="1.3"/></g></svg>`,
+            bK: `<svg class="piece-svg" viewBox="0 0 45 45"><g fill="none" fill-rule="evenodd" stroke="#0f172a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22.5 11.63V6" stroke-linejoin="miter"/><path d="M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5" fill="#1e293b" stroke-linecap="butt" stroke-linejoin="miter"/><path d="M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z" fill="#1e293b"/><path d="M20 8h5" stroke-linejoin="miter"/><path d="M32 29.5s8.5-4 6.03-9.65C34.15 14 25 18 22.5 24.5l.01 2.1-.01-2.1C20 18 9.906 14 6.997 19.85c-2.497 5.65 4.853 9 4.853 9" stroke="#94a3b8" stroke-width="1.3"/><path d="M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0" stroke="#94a3b8" stroke-width="1.3"/></g></svg>`
+        };
+
+        /**
+         * 3. SUN'IY INTELLEKT (MINIMAX + POZITSION BAHOLASH)
+         */
+        const PIECE_VALUES = {
+            p: 100,
+            n: 320,
+            b: 330,
+            r: 500,
+            q: 900,
+            k: 20000
+        };
+
+        // Donalarning taxtadagi optimal pozitsiya jadvallari (Oqlar uchun)
+        const PST = {
+            p: [
+                [0,  0,  0,  0,  0,  0,  0,  0],
+                [50, 50, 50, 50, 50, 50, 50, 50],
+                [10, 10, 20, 30, 30, 20, 10, 10],
+                [5,  5, 10, 25, 25, 10,  5,  5],
+                [0,  0,  0, 20, 20,  0,  0,  0],
+                [5, -5,-10,  0,  0,-10, -5,  5],
+                [5, 10, 10,-20,-20, 10, 10,  5],
+                [0,  0,  0,  0,  0,  0,  0,  0]
+            ],
+            n: [
+                [-50,-40,-30,-30,-30,-30,-40,-50],
+                [-40,-20,  0,  0,  0,  0,-20,-40],
+                [-30,  0, 10, 15, 15, 10,  0,-30],
+                [-30,  5, 15, 20, 20, 15,  5,-30],
+                [-30,  0, 15, 20, 20, 15,  0,-30],
+                [-30,  5, 10, 15, 15, 10,  5,-30],
+                [-40,-20,  0,  5,  5,  0,-20,-40],
+                [-50,-40,-30,-30,-30,-30,-40,-50]
+            ],
+            b: [
+                [-20,-10,-10,-10,-10,-10,-10,-20],
+                [-10,  0,  0,  0,  0,  0,  0,-10],
+                [-10,  0,  5, 10, 10,  5,  0,-10],
+                [-10,  5,  5, 10, 10,  5,  5,-10],
+                [-10,  0, 10, 10, 10, 10,  0,-10],
+                [-10, 10, 10, 10, 10, 10, 10,-10],
+                [-10,  5,  0,  0,  0,  0,  5,-10],
+                [-20,-10,-10,-10,-10,-10,-10,-20]
+            ],
+            r: [
+                [0,  0,  0,  0,  0,  0,  0,  0],
+                [5, 10, 10, 10, 10, 10, 10,  5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [-5,  0,  0,  0,  0,  0,  0, -5],
+                [0,  0,  0,  5,  5,  0,  0,  0]
+            ],
+            q: [
+                [-20,-10,-10, -5, -5,-10,-10,-20],
+                [-10,  0,  0,  0,  0,  0,  0,-10],
+                [-10,  0,  5,  5,  5,  5,  0,-10],
+                [ -5,  0,  5,  5,  5,  5,  0, -5],
+                [  0,  0,  5,  5,  5,  5,  0, -5],
+                [-10,  5,  5,  5,  5,  5,  0,-10],
+                [-10,  0,  5,  0,  0,  0,  0,-10],
+                [-20,-10,-10, -5, -5,-10,-10,-20]
+            ],
+            k: [
+                [-30,-40,-40,-50,-50,-40,-40,-30],
+                [-30,-40,-40,-50,-50,-40,-40,-30],
+                [-30,-40,-40,-50,-50,-40,-40,-30],
+                [-30,-40,-40,-50,-50,-40,-40,-30],
+                [-20,-30,-30,-40,-40,-30,-30,-20],
+                [-10,-20,-20,-20,-20,-20,-20,-10],
+                [ 20, 20,  0,  0,  0,  0, 20, 20],
+                [ 20, 30, 10,  0,  0, 10, 30, 20]
+            ]
+        };
+
+        function evaluateBoard(gameInstance) {
+            const board = gameInstance.board();
+            let totalEvaluation = 0;
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = board[r][c];
+                    if (piece) {
+                        const baseVal = PIECE_VALUES[piece.type];
+                        const pstRow = piece.color === 'w' ? r : 7 - r;
+                        const posVal = PST[piece.type][pstRow][c];
+                        const val = baseVal + posVal;
+                        totalEvaluation += piece.color === 'w' ? val : -val;
+                    }
+                }
+            }
+            return totalEvaluation;
+        }
+
+        function minimax(gameInstance, depth, alpha, beta, isMaximizingPlayer) {
+            if (depth === 0 || gameInstance.game_over()) {
+                if (gameInstance.in_checkmate()) {
+                    return isMaximizingPlayer ? -99999 - depth : 99999 + depth;
+                }
+                if (gameInstance.in_draw() || gameInstance.in_stalemate()) {
+                    return 0;
+                }
+                return evaluateBoard(gameInstance);
+            }
+
+            const moves = gameInstance.moves();
+            // Urish yurishlarini oldinroq tekshirish (Alpha-Beta tezlashtirish)
+            moves.sort((a, b) => (b.includes('x') ? 1 : 0) - (a.includes('x') ? 1 : 0));
+
+            if (isMaximizingPlayer) {
+                let maxEval = -Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    gameInstance.move(moves[i]);
+                    const evaluation = minimax(gameInstance, depth - 1, alpha, beta, false);
+                    gameInstance.undo();
+                    maxEval = Math.max(maxEval, evaluation);
+                    alpha = Math.max(alpha, evaluation);
+                    if (beta <= alpha) break;
+                }
+                return maxEval;
+            } else {
+                let minEval = Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    gameInstance.move(moves[i]);
+                    const evaluation = minimax(gameInstance, depth - 1, alpha, beta, true);
+                    gameInstance.undo();
+                    minEval = Math.min(minEval, evaluation);
+                    beta = Math.min(beta, evaluation);
+                    if (beta <= alpha) break;
+                }
+                return minEval;
+            }
+        }
+
+        function computeBestAiMove(gameInstance, difficulty) {
+            const possibleMoves = gameInstance.moves({ verbose: true });
+            if (possibleMoves.length === 0) return null;
+
+            // Oson daraja: Ko'proq tasodifiy yurishlar, ba'zida urish
+            if (difficulty === 'easy') {
+                const captures = possibleMoves.filter(m => m.captured);
+                if (captures.length > 0 && Math.random() < 0.45) {
+                    return captures[Math.floor(Math.random() * captures.length)];
+                }
+                return possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+            }
+
+            // O'rtacha daraja: 2-qadam chuqurlikdagi Minimax + Alpha-Beta
+            let bestMove = null;
+            let bestValue = Infinity; // Bot qora ('b') rangda o'ynaydi, demak minimal ball qidiradi
+
+            // Bir xil qiymatli yurishlar orasida xilma-xillik bo'lishi uchun aralashtiramiz
+            possibleMoves.sort(() => Math.random() - 0.5);
+
+            for (let i = 0; i < possibleMoves.length; i++) {
+                const move = possibleMoves[i];
+                gameInstance.move(move);
+                const boardValue = minimax(gameInstance, 2, -Infinity, Infinity, true);
+                gameInstance.undo();
+
+                if (boardValue < bestValue) {
+                    bestValue = boardValue;
+                    bestMove = move;
+                }
+            }
+            return bestMove || possibleMoves[0];
+        }
+
+        /**
+         * 4. ASOSIY O'YIN VA INTERFEYS BOSHQARUVI
+         */
+        const chess = new Chess();
+        const sound = new ChessSound();
+
+        let gameMode = 'ai'; // 'ai' yoki 'pvp'
+        let aiDifficulty = 'medium'; // 'easy' yoki 'medium'
+        let boardOrientation = 'w'; // 'w' (oqlar pastda) yoki 'b' (qoralar pastda)
+        let selectedSquare = null;
+        let legalMovesForSelected = [];
+        let pendingPromotion = null;
+        let isAiThinking = false;
+        let aiTimer = null;
+
+        // DOM elementlar
+        const boardEl = document.getElementById('chess-board');
+        const statusTextEl = document.getElementById('status-text');
+        const statusCardEl = document.getElementById('status-card');
+        const thinkingEl = document.getElementById('thinking-indicator');
+        const moveHistoryListEl = document.getElementById('move-history-list');
+        const moveCountEl = document.getElementById('move-count');
+        const promotionModalEl = document.getElementById('promotion-modal');
+        const promotionChoicesEl = document.getElementById('promotion-choices');
+
+        const btnModeAi = document.getElementById('btn-mode-ai');
+        const btnModePvp = document.getElementById('btn-mode-pvp');
+        const aiDiffContainer = document.getElementById('ai-diff-container');
+        const btnDiffEasy = document.getElementById('btn-diff-easy');
+        const btnDiffMedium = document.getElementById('btn-diff-medium');
+        const btnNewGame = document.getElementById('btn-new-game');
+        const btnUndo = document.getElementById('btn-undo');
+        const btnFlip = document.getElementById('btn-flip');
+        const btnSound = document.getElementById('btn-sound');
+
+        const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+        const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+        // Shaxmat taxtasini chizish
+        function renderBoard() {
+            boardEl.innerHTML = '';
+            const boardState = chess.board();
+            const history = chess.history({ verbose: true });
+            const lastMove = history.length > 0 ? history[history.length - 1] : null;
+
+            // Shoh (Check) ostidagi shoh katagini aniqlash
+            let checkedKingSquare = null;
+            if (chess.in_check()) {
+                const turnColor = chess.turn();
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        const p = boardState[r][c];
+                        if (p && p.type === 'k' && p.color === turnColor) {
+                            checkedKingSquare = FILES[c] + RANKS[r];
+                        }
+                    }
+                }
+            }
+
+            const rowIndices = boardOrientation === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
+            const colIndices = boardOrientation === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
+
+            rowIndices.forEach((r, visualRowIdx) => {
+                colIndices.forEach((c, visualColIdx) => {
+                    const squareName = FILES[c] + RANKS[r];
+                    const isLight = (r + c) % 2 === 0;
+                    const piece = boardState[r][c];
+
+                    const sqDiv = document.createElement('div');
+                    sqDiv.className = `square ${isLight ? 'light' : 'dark'}`;
+                    sqDiv.dataset.square = squareName;
+
+                    // Oxirgi yurish yoritilishi
+                    if (lastMove && (lastMove.from === squareName || lastMove.to === squareName)) {
+                        sqDiv.classList.add(isLight ? 'last-move-light' : 'last-move-dark');
+                    }
+
+                    // Tanlangan katak
+                    if (selectedSquare === squareName) {
+                        sqDiv.classList.add('selected');
+                    }
+
+                    // Shoh (Check) katagi
+                    if (checkedKingSquare === squareName) {
+                        sqDiv.classList.add('in-check');
+                    }
+
+                    // Koordinatalarni ko'rsatish (faqat chetki qator va ustunlarda)
+                    if (visualColIdx === 0) {
+                        const rankSpan = document.createElement('span');
+                        rankSpan.className = 'coord-rank';
+                        rankSpan.textContent = RANKS[r];
+                        sqDiv.appendChild(rankSpan);
+                    }
+                    if (visualRowIdx === 7) {
+                        const fileSpan = document.createElement('span');
+                        fileSpan.className = 'coord-file';
+                        fileSpan.textContent = FILES[c];
+                        sqDiv.appendChild(fileSpan);
+                    }
+
+                    // Dona rasmini qo'shish
+                    if (piece) {
+                        const pieceKey = piece.color + piece.type.toUpperCase();
+                        sqDiv.insertAdjacentHTML('beforeend', PIECE_SVGS[pieceKey]);
+                    }
+
+                    // Ruxsat etilgan yurish nuqtalari va urish halqalari
+                    const moveHint = legalMovesForSelected.find(m => m.to === squareName);
+                    if (moveHint) {
+                        if (moveHint.captured || moveHint.flags.includes('e')) {
+                            const ring = document.createElement('div');
+                            ring.className = 'hint-capture';
+                            sqDiv.appendChild(ring);
+                        } else {
+                            const dot = document.createElement('div');
+                            dot.className = 'hint-dot';
+                            sqDiv.appendChild(dot);
+                        }
+                    }
+
+                    sqDiv.addEventListener('click', () => handleSquareClick(squareName));
+                    boardEl.appendChild(sqDiv);
+                });
+            });
+
+            updatePlayerPanels();
+            updateStatusPanel();
+            updateMoveHistory();
+            btnUndo.disabled = chess.history().length === 0 || isAiThinking;
+        }
+
+        // Katak bosilgandagi mantiq
+        function handleSquareClick(square) {
+            if (chess.game_over() || isAiThinking || pendingPromotion) return;
+
+            // Agar AI rejimida bo'lsa, foydalanuvchi faqat oq donalarni ('w') boshqaradi
+            if (gameMode === 'ai' && chess.turn() !== 'w') return;
+
+            // Agar ruxsat etilgan manzil katagi bosilgan bo'lsa -> yurishni bajaramiz
+            const targetMove = legalMovesForSelected.find(m => m.to === square);
+            if (targetMove) {
+                // Piyoda oxirgi qatorga yetib borganda (Promotion)
+                if (targetMove.flags.includes('p')) {
+                    openPromotionModal(targetMove.from, targetMove.to, chess.turn());
+                    return;
+                }
+                executeMove({ from: targetMove.from, to: targetMove.to });
+                return;
+            }
+
+            // O'z donasini tanlash yoki tanlovni bekor qilish
+            const clickedPiece = chess.get(square);
+            if (clickedPiece && clickedPiece.color === chess.turn()) {
+                if (selectedSquare === square) {
+                    selectedSquare = null;
+                    legalMovesForSelected = [];
+                } else {
+                    selectedSquare = square;
+                    legalMovesForSelected = chess.moves({ square: square, verbose: true });
+                }
+            } else {
+                selectedSquare = null;
+                legalMovesForSelected = [];
+            }
+
+            renderBoard();
+        }
+
+        // Yurishni amalga oshirish
+        function executeMove(moveObj) {
+            const moveResult = chess.move(moveObj);
+            if (!moveResult) return;
+
+            selectedSquare = null;
+            legalMovesForSelected = [];
+
+            // Ovoz effektlari
+            if (chess.in_checkmate() || chess.in_draw()) {
+                sound.playGameOver();
+            } else if (chess.in_check()) {
+                sound.playCheck();
+            } else if (moveResult.flags.includes('k') || moveResult.flags.includes('q')) {
+                sound.playCastle();
+            } else if (moveResult.captured) {
+                sound.playCapture();
+            } else {
+                sound.playMove();
+            }
+
+            renderBoard();
+
+            // Agar AI rejimi bo'lsa va navbat Qoralarga ('b') o'tgan bo'lsa
+            if (!chess.game_over() && gameMode === 'ai' && chess.turn() === 'b') {
+                triggerAiTurn();
+            }
+        }
+
+        // Bot yurishini ishga tushirish
+        function triggerAiTurn() {
+            isAiThinking = true;
+            thinkingEl.classList.remove('hidden');
+            btnUndo.disabled = true;
+
+            aiTimer = setTimeout(() => {
+                const bestMove = computeBestAiMove(chess, aiDifficulty);
+                isAiThinking = false;
+                thinkingEl.classList.add('hidden');
+
+                if (bestMove) {
+                    executeMove({
+                        from: bestMove.from,
+                        to: bestMove.to,
+                        promotion: bestMove.promotion || 'q'
+                    });
+                } else {
+                    renderBoard();
+                }
+            }, 350);
+        }
+
+        // Piyoda almashtirish (Promotion) modali
+        function openPromotionModal(from, to, color) {
+            pendingPromotion = { from, to };
+            promotionChoicesEl.innerHTML = '';
+            const pieces = ['q', 'r', 'b', 'n'];
+
+            pieces.forEach(pType => {
+                const btn = document.createElement('button');
+                btn.className = 'aspect-square rounded-xl bg-slate-800 hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-400 flex items-center justify-center transition-all active:scale-95';
+                const key = color + pType.toUpperCase();
+                btn.innerHTML = PIECE_SVGS[key];
+                btn.addEventListener('click', () => {
+                    promotionModalEl.classList.add('hidden');
+                    const moveData = { from: pendingPromotion.from, to: pendingPromotion.to, promotion: pType };
+                    pendingPromotion = null;
+                    executeMove(moveData);
+                });
+                promotionChoicesEl.appendChild(btn);
+            });
+
+            promotionModalEl.classList.remove('hidden');
+        }
+
+        // Yutilgan donalar va ustunlik ballarini hisoblash
+        function getCapturedAndMaterial() {
+            const initialCounts = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+            const currentCounts = {
+                w: { p: 0, n: 0, b: 0, r: 0, q: 0 },
+                b: { p: 0, n: 0, b: 0, r: 0, q: 0 }
+            };
+
+            const boardState = chess.board();
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const p = boardState[r][c];
+                    if (p && p.type !== 'k') {
+                        currentCounts[p.color][p.type]++;
+                    }
+                }
+            }
+
+            // Oqlar yutib olgan qora donalar, Qoralar yutib olgan oq donalar
+            const capturedByWhite = [];
+            const capturedByBlack = [];
+            const order = ['q', 'r', 'b', 'n', 'p'];
+            const matValues = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+
+            let whiteScore = 0;
+            let blackScore = 0;
+
+            order.forEach(type => {
+                const lostBlack = Math.max(0, initialCounts[type] - currentCounts.b[type]);
+                for (let i = 0; i < lostBlack; i++) {
+                    capturedByWhite.push('b' + type.toUpperCase());
+                    whiteScore += matValues[type];
+                }
+
+                const lostWhite = Math.max(0, initialCounts[type] - currentCounts.w[type]);
+                for (let i = 0; i < lostWhite; i++) {
+                    capturedByBlack.push('w' + type.toUpperCase());
+                    blackScore += matValues[type];
+                }
+            });
+
+            return {
+                wCaptured: capturedByWhite,
+                bCaptured: capturedByBlack,
+                diff: whiteScore - blackScore
+            };
+        }
+
+        // Yuqori va Pastki o'yinchi kartochkalarini yangilash
+        function updatePlayerPanels() {
+            const topColor = boardOrientation === 'w' ? 'b' : 'w';
+            const bottomColor = boardOrientation === 'w' ? 'w' : 'b';
+            const turn = chess.turn();
+            const isOver = chess.game_over();
+
+            const topNameEl = document.getElementById('top-player-name');
+            const topAvatarEl = document.getElementById('top-player-avatar');
+            const topBadgeEl = document.getElementById('top-player-badge');
+            const topCapturedEl = document.getElementById('top-captured');
+            const topAdvEl = document.getElementById('top-advantage');
+
+            const bottomNameEl = document.getElementById('bottom-player-name');
+            const bottomAvatarEl = document.getElementById('bottom-player-avatar');
+            const bottomBadgeEl = document.getElementById('bottom-player-badge');
+            const bottomCapturedEl = document.getElementById('bottom-captured');
+            const bottomAdvEl = document.getElementById('bottom-advantage');
+
+            const getPlayerMeta = (color) => {
+                if (gameMode === 'ai') {
+                    return color === 'w'
+                        ? { name: 'Oqlar (Siz)', icon: '👤' }
+                        : { name: `Qoralar (Bot • ${aiDifficulty === 'easy' ? 'Oson' : "O'rtacha"})`, icon: '🤖' };
+                } else {
+                    return color === 'w'
+                        ? { name: 'Oqlar (1-o\'yinchi)', icon: '♔' }
+                        : { name: 'Qoralar (2-o\'yinchi)', icon: '♚' };
+                }
+            };
+
+            const topMeta = getPlayerMeta(topColor);
+            const bottomMeta = getPlayerMeta(bottomColor);
+
+            topNameEl.textContent = topMeta.name;
+            topAvatarEl.textContent = topMeta.icon;
+            bottomNameEl.textContent = bottomMeta.name;
+            bottomAvatarEl.textContent = bottomMeta.icon;
+
+            // Navbat belgisi
+            topBadgeEl.classList.toggle('hidden', isOver || turn !== topColor);
+            bottomBadgeEl.classList.toggle('hidden', isOver || turn !== bottomColor);
+
+            // Yutilgan donalar
+            const { wCaptured, bCaptured, diff } = getCapturedAndMaterial();
+            const topList = topColor === 'w' ? wCaptured : bCaptured;
+            const bottomList = bottomColor === 'w' ? wCaptured : bCaptured;
+
+            topCapturedEl.innerHTML = topList.map(k => `<span class="w-5 h-5 inline-block">${PIECE_SVGS[k]}</span>`).join('');
+            bottomCapturedEl.innerHTML = bottomList.map(k => `<span class="w-5 h-5 inline-block">${PIECE_SVGS[k]}</span>`).join('');
+
+            // Material ustunlik (+3, +5 va h.k.)
+            topAdvEl.textContent = '';
+            bottomAdvEl.textContent = '';
+            if (diff > 0) {
+                if (topColor === 'w') topAdvEl.textContent = `+${diff}`;
+                else bottomAdvEl.textContent = `+${diff}`;
+            } else if (diff < 0) {
+                if (topColor === 'b') topAdvEl.textContent = `+${Math.abs(diff)}`;
+                else bottomAdvEl.textContent = `+${Math.abs(diff)}`;
+            }
+        }
+
+        // O'yin holati matnini yangilash
+        function updateStatusPanel() {
+            const turnName = chess.turn() === 'w' ? 'Oqlar' : 'Qoralar';
+            statusCardEl.className = 'bg-slate-900/90 border p-4 rounded-2xl shadow-lg transition-all ';
+
+            if (chess.in_checkmate()) {
+                const winner = chess.turn() === 'w' ? 'Qoralar' : 'Oqlar';
+                statusCardEl.classList.add('border-emerald-500', 'bg-emerald-950/30');
+                statusTextEl.className = 'text-base sm:text-lg font-extrabold text-emerald-400';
+                statusTextEl.textContent = `🏆 Shoh va Mot! ${winner} g'alaba qozondi!`;
+            } else if (chess.in_stalemate()) {
+                statusCardEl.classList.add('border-amber-500/50');
+                statusTextEl.className = 'text-base sm:text-lg font-bold text-amber-400';
+                statusTextEl.textContent = '🤝 Pat! O\'yin durang bilan yakunlandi.';
+            } else if (chess.insufficient_material()) {
+                statusCardEl.classList.add('border-amber-500/50');
+                statusTextEl.className = 'text-base sm:text-lg font-bold text-amber-400';
+                statusTextEl.textContent = '🤝 Durang! Mot qilish uchun donalar yetarli emas.';
+            } else if (chess.in_threefold_repetition()) {
+                statusCardEl.classList.add('border-amber-500/50');
+                statusTextEl.className = 'text-base sm:text-lg font-bold text-amber-400';
+                statusTextEl.textContent = '🤝 Durang! Bir xil holat 3 marta takrorlandi.';
+            } else if (chess.in_draw()) {
+                statusCardEl.classList.add('border-amber-500/50');
+                statusTextEl.className = 'text-base sm:text-lg font-bold text-amber-400';
+                statusTextEl.textContent = '🤝 O\'yin durang bilan yakunlandi.';
+            } else if (chess.in_check()) {
+                statusCardEl.classList.add('border-rose-500', 'bg-rose-950/30');
+                statusTextEl.className = 'text-base sm:text-lg font-extrabold text-rose-400';
+                statusTextEl.textContent = `⚠️ Shoh (Check)! ${turnName}ning yurishi`;
+            } else {
+                statusCardEl.classList.add('border-slate-800');
+                statusTextEl.className = 'text-base sm:text-lg font-bold text-emerald-400';
+                statusTextEl.textContent = `${turnName}ning yurishi`;
+            }
+        }
+
+        // Yurishlar tarixini (Algebraic Notation) yangilash
+        function updateMoveHistory() {
+            const history = chess.history();
+            moveCountEl.textContent = `${history.length} yurish`;
+
+            if (history.length === 0) {
+                moveHistoryListEl.innerHTML = `
+                    <div class="text-center text-slate-500 text-xs py-10 font-sans">
+                        O'yinni boshlash uchun oq donalardan birini tanlang.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            for (let i = 0; i < history.length; i += 2) {
+                const moveNum = Math.floor(i / 2) + 1;
+                const whiteMove = history[i];
+                const blackMove = history[i + 1] || '';
+                const isLastRow = i + 2 >= history.length;
+
+                html += `
+                    <div class="grid grid-cols-12 items-center px-2.5 py-1.5 rounded-lg ${isLastRow ? 'bg-slate-800/80 border border-slate-700/70' : 'hover:bg-slate-800/40'}">
+                        <span class="col-span-2 text-slate-500 text-xs">${moveNum}.</span>
+                        <span class="col-span-5 text-slate-100 font-semibold">${whiteMove}</span>
+                        <span class="col-span-5 text-emerald-400 font-semibold">${blackMove}</span>
+                    </div>
+                `;
+            }
+
+            moveHistoryListEl.innerHTML = html;
+            moveHistoryListEl.scrollTop = moveHistoryListEl.scrollHeight;
+        }
+
+        // Yangi o'yin boshlash
+        function startNewGame() {
+            if (aiTimer) clearTimeout(aiTimer);
+            isAiThinking = false;
+            thinkingEl.classList.add('hidden');
+            pendingPromotion = null;
+            promotionModalEl.classList.add('hidden');
+            selectedSquare = null;
+            legalMovesForSelected = [];
+            chess.reset();
+            sound.playMove();
+            renderBoard();
+        }
+
+        // Yurishni orqaga qaytarish (Undo)
+        function undoMove() {
+            if (isAiThinking || chess.history().length === 0) return;
+
+            if (gameMode === 'ai') {
+                // Bot rejimida ham botning, ham o'yinchining yurishini bekor qilamiz
+                if (chess.turn() === 'w' && chess.history().length >= 2) {
+                    chess.undo();
+                    chess.undo();
+                } else {
+                    chess.undo();
+                }
+            } else {
+                chess.undo();
+            }
+
+            selectedSquare = null;
+            legalMovesForSelected = [];
+            sound.playMove();
+            renderBoard();
+        }
+
+        // Taxtani aylantirish (Flip)
+        function flipBoard() {
+            boardOrientation = boardOrientation === 'w' ? 'b' : 'w';
+            sound.playMove();
+            renderBoard();
+        }
+
+        // Event Listeners
+        btnNewGame.addEventListener('click', startNewGame);
+        btnUndo.addEventListener('click', undoMove);
+        btnFlip.addEventListener('click', flipBoard);
+
+        btnModeAi.addEventListener('click', () => {
+            if (gameMode === 'ai') return;
+            gameMode = 'ai';
+            btnModeAi.classList.add('active');
+            btnModePvp.classList.remove('active');
+            aiDiffContainer.classList.remove('hidden');
+            boardOrientation = 'w';
+            startNewGame();
+        });
+
+        btnModePvp.addEventListener('click', () => {
+            if (gameMode === 'pvp') return;
+            gameMode = 'pvp';
+            btnModePvp.classList.add('active');
+            btnModeAi.classList.remove('active');
+            aiDiffContainer.classList.add('hidden');
+            startNewGame();
+        });
+
+        btnDiffEasy.addEventListener('click', () => {
+            if (aiDifficulty === 'easy') return;
+            aiDifficulty = 'easy';
+            btnDiffEasy.classList.add('active');
+            btnDiffMedium.classList.remove('active');
+            startNewGame();
+        });
+
+        btnDiffMedium.addEventListener('click', () => {
+            if (aiDifficulty === 'medium') return;
+            aiDifficulty = 'medium';
+            btnDiffMedium.classList.add('active');
+            btnDiffEasy.classList.remove('active');
+            startNewGame();
+        });
+
+        btnSound.addEventListener('click', () => {
+            sound.enabled = !sound.enabled;
+            document.getElementById('icon-sound-on').classList.toggle('hidden', !sound.enabled);
+            document.getElementById('icon-sound-off').classList.toggle('hidden', sound.enabled);
+            btnSound.classList.toggle('text-emerald-400', sound.enabled);
+            btnSound.classList.toggle('text-slate-400', !sound.enabled);
+            if (sound.enabled) sound.playMove();
+        });
+
+        // O'yinni dastlabki yuklash
+        window.addEventListener('DOMContentLoaded', () => {
+            renderBoard();
+        });
+    </script>
+</body>
+</html>
